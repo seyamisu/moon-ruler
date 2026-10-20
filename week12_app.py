@@ -222,6 +222,43 @@ def _save_users_to_cloud(users):
         return False
 
 
+def _save_user_to_cloud(username, user):
+    """Upsert one account only. Used for normal reader interactions."""
+    client = _supabase_client()
+    if client is None:
+        return False
+    _, _, table = _supabase_settings()
+    try:
+        username = str(username).strip().lstrip("@").lower()
+        now = datetime.now(timezone.utc).isoformat()
+        client.table(table).upsert(
+            {"username": username, "data": user, "updated_at": now},
+            on_conflict="username",
+        ).execute()
+        st.session_state.pop("cloud_storage_error", None)
+        st.session_state.pop("cloud_storage_fallback", None)
+        return True
+    except Exception as exc:
+        st.session_state["cloud_storage_error"] = f"Cloud storage write failed: {exc}"
+        return False
+
+
+def _delete_user_from_cloud(username):
+    """Delete one account from Supabase without scanning the whole table."""
+    client = _supabase_client()
+    if client is None:
+        return False
+    _, _, table = _supabase_settings()
+    try:
+        username = str(username).strip().lstrip("@").lower()
+        client.table(table).delete().eq("username", username).execute()
+        st.session_state.pop("cloud_storage_error", None)
+        return True
+    except Exception as exc:
+        st.session_state["cloud_storage_error"] = f"Cloud storage delete failed: {exc}"
+        return False
+
+
 def _read_admin_registry(path):
     if not path.exists():
         return set()
@@ -271,8 +308,15 @@ def save_admins(admins):
         pass
 
 
-def load_users():
-    # Prefer persistent cloud storage when Supabase is configured.
+def load_users(force=False):
+    """Load accounts, using an in-session cache to avoid repeated network reads.
+
+    Supabase is contacted once at the beginning of a browser session (or when
+    ``force=True``). Normal Streamlit reruns reuse the cached dictionary.
+    """
+    if not force and "_users_cache" in st.session_state:
+        return st.session_state["_users_cache"]
+
     users = _load_users_from_cloud() if cloud_storage_enabled() else None
     if users is None:
         if not USERS_PATH.exists():
@@ -294,27 +338,69 @@ def load_users():
             changed = True
     if registry_changed:
         save_admins(admins)
+
+    st.session_state["_users_cache"] = users
     if changed:
+        # Migration writes are rare and happen only on the first load.
         save_users(users)
     return users
 
 
-def save_users(users):
-    """Persist users to Supabase when configured; otherwise use data/users.json locally.
+def refresh_users_from_storage():
+    """Explicitly refresh the session cache from Supabase/local storage."""
+    st.session_state.pop("_users_cache", None)
+    return load_users(force=True)
 
-    A failed configured cloud write is recorded prominently instead of silently
-    pretending that local JSON is persistent on Streamlit Community Cloud.
+
+def save_users(users):
+    """Persist a full account collection for rare admin/bulk operations.
+
+    Normal reader actions use ``save_user`` so they only upsert one row.
     """
+    st.session_state["_users_cache"] = users
     if cloud_storage_enabled():
         if _save_users_to_cloud(users):
+            st.session_state.pop("cloud_storage_fallback", None)
             return
-        # Keep a local emergency copy, but make the cloud failure explicit.
         USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
         USERS_PATH.write_text(json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8")
         st.session_state["cloud_storage_fallback"] = True
         return
     USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
     USERS_PATH.write_text(json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def save_user(username, user):
+    """Persist one user and update the in-session cache immediately."""
+    username = str(username).strip().lstrip("@").lower()
+    users = load_users()
+    users[username] = user
+    st.session_state["_users_cache"] = users
+
+    if cloud_storage_enabled():
+        if _save_user_to_cloud(username, user):
+            return True
+        USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        USERS_PATH.write_text(json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8")
+        st.session_state["cloud_storage_fallback"] = True
+        return False
+
+    USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    USERS_PATH.write_text(json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8")
+    return True
+
+
+def delete_user(username):
+    """Delete one account efficiently and remove it from the session cache."""
+    username = str(username).strip().lstrip("@").lower()
+    users = load_users()
+    users.pop(username, None)
+    st.session_state["_users_cache"] = users
+    if cloud_storage_enabled():
+        return _delete_user_from_cloud(username)
+    USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    USERS_PATH.write_text(json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8")
+    return True
 
 
 def set_admin_role(username, make_admin=True):
@@ -330,7 +416,7 @@ def set_admin_role(username, make_admin=True):
         admins.discard(username)
         users[username]["role"] = "reader"
     save_admins(admins)
-    save_users(users)
+    save_user(username, users[username])
 
 
 def effective_role(username, user=None):
@@ -348,10 +434,14 @@ def current_user():
 
 
 def update_user(**changes):
+    username = st.session_state.username
     users = load_users()
-    users[st.session_state.username].update(changes)
-    save_users(users)
-
+    user = users[username]
+    dirty = any(user.get(key) != value for key, value in changes.items())
+    if not dirty:
+        return
+    user.update(changes)
+    save_user(username, user)
 
 def age_from(iso_date):
     born, today = date.fromisoformat(iso_date), date.today()
@@ -1113,6 +1203,7 @@ def render_page_turn():
 def logout():
     st.session_state.username = None
     st.session_state.draft = {}
+    st.session_state.pop("_users_cache", None)
     go("login")
 
 
@@ -1201,7 +1292,7 @@ def page_login():
                     else:
                         salt = secrets.token_hex(8)
                         users[key] = {"salt": salt, "hash": hash_password(new_pw, salt), "ratings": {}, "favorites": [], "read_books": [], "genres": [], "profile_done": False, "role": "reader"}
-                        save_users(users); st.session_state.username = key; st.session_state.draft = {}; go("profile")
+                        save_user(key, users[key]); st.session_state.username = key; st.session_state.draft = {}; go("profile")
 
 
 def page_profile():
@@ -1795,7 +1886,17 @@ def page_admin():
                 st.error(status["error"] or st.session_state.get("cloud_storage_error", "Cloud storage is unavailable."))
             if st.session_state.get("cloud_storage_fallback"):
                 st.warning("A previous cloud write failed in this session, so Moon Ruler used a temporary local fallback copy.")
-            if st.button("Test Supabase read + write", key="test_supabase_rw"):
+            st.caption("Performance mode: user records are cached in this browser session and normal saves upsert only the changed account.")
+            diag_a, diag_b = st.columns(2)
+            with diag_a:
+                test_storage = st.button("Test Supabase read + write", key="test_supabase_rw", use_container_width=True)
+            with diag_b:
+                refresh_storage = st.button("Refresh account cache", key="refresh_cloud_cache", use_container_width=True)
+            if refresh_storage:
+                refresh_users_from_storage()
+                st.success("Account cache refreshed from persistent storage.")
+                st.rerun()
+            if test_storage:
                 probe = cloud_storage_diagnostics(test_write=True)
                 if probe["read"] and probe["write"]:
                     st.success("Supabase read/write test passed. Persistent account storage is working.")
@@ -1992,9 +2093,10 @@ def page_admin():
                 ):
                     latest = load_users()
                     if selected in latest:
-                        del latest[selected]
-                        save_users(latest)
-                        st.success(f"@{selected} was deleted.")
+                        if delete_user(selected):
+                            st.success(f"@{selected} was deleted.")
+                        else:
+                            st.error(st.session_state.get("cloud_storage_error", "Could not delete the account."))
                         st.rerun()
 
 def dashboard_profile_panel(user, category):
