@@ -991,6 +991,27 @@ div[data-testid="stExpander"]:hover {
     }
 }
 
+
+
+/* Dashboard recommendation feed: compact independent scrolling */
+.st-key-dashboard-recommendation-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(111, 78, 55, 0.45) transparent;
+    padding-right: 0.35rem;
+}
+.st-key-dashboard-recommendation-scroll::-webkit-scrollbar {
+    width: 7px;
+}
+.st-key-dashboard-recommendation-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.st-key-dashboard-recommendation-scroll::-webkit-scrollbar-thumb {
+    background: rgba(111, 78, 55, 0.30);
+    border-radius: 999px;
+}
+.st-key-dashboard-recommendation-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(111, 78, 55, 0.50);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1108,8 +1129,8 @@ def page_login():
                         st.error("That name and secret do not match any character.")
             with sign_up:
                 with st.form("signup"):
-                    new_name = st.text_input("Choose a character name", placeholder="@username")
-                    new_pw = st.text_input("Choose your truth not told", type="password")
+                    new_name = st.text_input("Choose your character name", placeholder="@username")
+                    new_pw = st.text_input("What is your secret?", type="password")
                     confirm = st.text_input("Repeat it", type="password")
                     created = st.form_submit_button("Begin my story  ▷", use_container_width=True)
                 if created:
@@ -1442,7 +1463,7 @@ def page_recommendations():
         m2.metric("Taste strength", f"{profile_strength(user)}%")
         m3.metric("Rated", len(ratings))
         m4.metric("Read excluded", len(read_titles))
-        with st.expander("Recommendation diagnostics — useful during instructor review"):
+        with st.expander("Recommendation diagnostics"):
             st.write(f"**Active category:** {category}")
             st.write(f"**Selected genres:** {', '.join(user.get('genres', [])) or 'None yet'}")
             st.write(f"**Saved books:** {len(favorites)} · **Read books:** {len(user.get('read_books', []))} · **Rated books:** {len(ratings)}")
@@ -1955,11 +1976,15 @@ def page_dashboard():
             shown=[g for g in user.get("genres",[]) if g in genres_for_scope(df,category)]
             if not shown: shown=list(df[df["category"]==category]["genre"].value_counts().index[:3])
             engine=ContentRecommender(df,X,feature_names)
-            for genre in shown[:3]:
-                st.markdown(f'<div class="rec-title">{html.escape(genre)}</div>',unsafe_allow_html=True)
-                picks=engine.recommend(taste,read_titles,category=category,genre=genre,top_n=3) if personalized else engine.default_recommendations(read_titles,category=category,genre=genre,top_n=3)
-                for _,row in picks.iterrows(): mini_recommendation_row(row,why_recommended(row,df,sim,user,personalized),favorites,ratings,f"dash_{genre}", "dashboard")
-                st.markdown('<div class="genre-divider"></div>',unsafe_allow_html=True)
+            # Keep the dashboard compact: only the recommendation feed scrolls.
+            # The left interests panel and right profile card remain in place while
+            # readers browse several recommendation shelves in the center column.
+            with st.container(height=560, border=False, key="dashboard-recommendation-scroll"):
+                for genre in shown[:3]:
+                    st.markdown(f'<div class="rec-title">{html.escape(genre)}</div>',unsafe_allow_html=True)
+                    picks=engine.recommend(taste,read_titles,category=category,genre=genre,top_n=3) if personalized else engine.default_recommendations(read_titles,category=category,genre=genre,top_n=3)
+                    for _,row in picks.iterrows(): mini_recommendation_row(row,why_recommended(row,df,sim,user,personalized),favorites,ratings,f"dash_{genre}", "dashboard")
+                    st.markdown('<div class="genre-divider"></div>',unsafe_allow_html=True)
         with right:
             dashboard_profile_panel(user,category)
 
