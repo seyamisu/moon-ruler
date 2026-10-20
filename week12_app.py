@@ -30,6 +30,15 @@ USERS_PATH = BASE_DIR / "data" / "users.json"
 ADMINS_PATH = BASE_DIR / "data" / "admins.json"
 USER_ADMIN_REGISTRY_PATH = Path.home() / ".moon_ruler" / "admins.json"
 BOOKS_PATH = BASE_DIR / "data" / "books.csv"
+DATA_DIR = BASE_DIR / "data"
+
+# Ensure writable runtime state files have a parent directory even if a deployment
+# accidentally omits the state files. The catalog itself must still be shipped.
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+if not USERS_PATH.exists():
+    USERS_PATH.write_text("{}\n", encoding="utf-8")
+if not ADMINS_PATH.exists():
+    ADMINS_PATH.write_text(json.dumps({"admins": []}, indent=2) + "\n", encoding="utf-8")
 
 TIERS = {
     "New to the Shelf": {"blurb": "Just starting out", "max_genres": 0},
@@ -161,6 +170,7 @@ def load_users():
 
 
 def save_users(users):
+    USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
     USERS_PATH.write_text(json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -511,6 +521,207 @@ div[data-testid="stExpander"]{background:rgba(255,255,255,.22);border:1px solid 
 .book-grid-rating{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:.9rem;color:#76543A;text-align:center}
 .interests-panel-title{font-family:'Cormorant Garamond',serif;font-size:1.7rem;font-weight:700;text-align:center;margin:.4rem 0 .7rem}
 
+
+/* ============================================================
+   MOON RULER — POLISHED MOTION SYSTEM
+   CSS-only: safe for Streamlit Community Cloud
+   ============================================================ */
+
+/* Page entrance: subtle editorial reveal */
+.st-key-book-dashboard,
+.page-shell,
+.st-key-book-login,
+.st-key-book-profile,
+.st-key-book-genres {
+    animation: moonPageIn .42s cubic-bezier(.2,.7,.25,1) both;
+}
+@keyframes moonPageIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* General interactive controls */
+.stButton > button,
+[data-testid="stFormSubmitButton"] > button {
+    transition:
+        transform .18s ease,
+        box-shadow .18s ease,
+        background-color .18s ease,
+        border-color .18s ease,
+        color .18s ease !important;
+    will-change: transform;
+}
+.stButton > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 7px 16px rgba(74,50,34,.10) !important;
+}
+.stButton > button:active,
+[data-testid="stFormSubmitButton"] > button:active {
+    transform: translateY(0) scale(.985);
+    box-shadow: 0 3px 8px rgba(74,50,34,.08) !important;
+}
+
+/* Top navigation: polished hover and active state */
+[class*="st-key-nav_"] .stButton > button,
+.st-key-book-dashboard > div:first-child .stButton > button {
+    position: relative;
+    overflow: hidden;
+}
+[class*="st-key-nav_"] .stButton > button::after,
+.st-key-book-dashboard > div:first-child .stButton > button::after {
+    content: "";
+    position: absolute;
+    left: 14%;
+    right: 14%;
+    bottom: 5px;
+    height: 1px;
+    background: var(--brown);
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform .22s ease;
+    opacity: .75;
+}
+[class*="st-key-nav_"] .stButton > button:hover::after,
+.st-key-book-dashboard > div:first-child .stButton > button:hover::after {
+    transform: scaleX(1);
+}
+
+/* Recommendation cards: lift + depth */
+[class*='st-key-rec-book-card-'] {
+    transition:
+        transform .24s cubic-bezier(.2,.7,.25,1),
+        box-shadow .24s ease,
+        filter .24s ease;
+    animation: moonCardIn .38s ease both;
+    will-change: transform;
+}
+[class*='st-key-rec-book-card-']:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 26px rgba(78,53,34,.14) !important;
+    filter: saturate(1.02);
+}
+@keyframes moonCardIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Book covers: gentle zoom only inside recommendation cards */
+[class*='st-key-rec-book-card-'] [data-testid='stImage'] img {
+    transition: transform .28s ease, box-shadow .28s ease, filter .28s ease;
+    transform-origin: center;
+}
+[class*='st-key-rec-book-card-']:hover [data-testid='stImage'] img {
+    transform: scale(1.045);
+    box-shadow: 0 7px 16px rgba(62,43,30,.20) !important;
+    filter: contrast(1.02);
+}
+
+/* Dashboard heart/star vector actions */
+[class*="st-key-dash_save_"] .stButton > button,
+[class*="st-key-dash_rate_"] .stButton > button {
+    transition:
+        transform .16s ease,
+        background-color .16s ease,
+        box-shadow .16s ease !important;
+}
+[class*="st-key-dash_save_"] .stButton > button:hover,
+[class*="st-key-dash_rate_"] .stButton > button:hover {
+    transform: translateY(-1px) scale(1.07);
+    background: #F6E9D4 !important;
+    box-shadow: 0 5px 12px rgba(80,55,35,.11) !important;
+}
+[class*="st-key-dash_save_"] .stButton > button:active,
+[class*="st-key-dash_rate_"] .stButton > button:active {
+    transform: scale(.93);
+}
+[class*="st-key-dash_save_"] .stButton > button [data-testid="stIconMaterial"],
+[class*="st-key-dash_rate_"] .stButton > button [data-testid="stIconMaterial"] {
+    transition: transform .16s ease, color .16s ease;
+}
+[class*="st-key-dash_save_"] .stButton > button:hover [data-testid="stIconMaterial"],
+[class*="st-key-dash_rate_"] .stButton > button:hover [data-testid="stIconMaterial"] {
+    transform: scale(1.08);
+}
+
+/* Interest shelf cards */
+.interest-card {
+    transition: transform .22s ease, box-shadow .22s ease, filter .22s ease;
+}
+.interest-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 18px rgba(80,55,35,.10);
+    filter: brightness(1.018);
+}
+
+/* Genre identity cards */
+.genre-badge {
+    transition: transform .22s ease, box-shadow .22s ease, filter .22s ease;
+}
+.genre-badge:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 9px 20px rgba(80,55,35,.11);
+    filter: brightness(1.02);
+}
+.genre-badge-icon {
+    transition: transform .24s ease;
+}
+.genre-badge:hover .genre-badge-icon {
+    transform: scale(1.07);
+}
+
+/* Profile card: very subtle depth */
+.profile-card,
+.st-key-profile-panel {
+    transition: transform .26s ease, box-shadow .26s ease;
+}
+.profile-card:hover,
+.st-key-profile-panel:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(76,52,37,.09);
+}
+.avatar-ring,
+.avatar-img {
+    transition: transform .26s ease, box-shadow .26s ease;
+}
+.profile-card:hover .avatar-ring,
+.profile-card:hover .avatar-img,
+.st-key-profile-panel:hover .avatar-ring,
+.st-key-profile-panel:hover .avatar-img {
+    transform: scale(1.025);
+}
+
+/* Search and text inputs */
+[data-testid="stTextInput"] input,
+[data-testid="stDateInput"] input,
+[data-baseweb="select"] > div,
+[data-testid="stSelectbox"] > div > div {
+    transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+[data-testid="stTextInput"] input:focus,
+[data-testid="stDateInput"] input:focus {
+    box-shadow: 0 0 0 3px rgba(118,80,56,.10) !important;
+}
+
+/* Expander polish */
+div[data-testid="stExpander"] {
+    transition: box-shadow .2s ease, border-color .2s ease;
+}
+div[data-testid="stExpander"]:hover {
+    border-color: #A98A70;
+    box-shadow: 0 6px 14px rgba(80,55,35,.06);
+}
+
+/* Respect operating-system accessibility preference */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -598,8 +809,8 @@ def page_login():
                         st.error("That name and secret do not match any character.")
             with sign_up:
                 with st.form("signup"):
-                    new_name = st.text_input("Choose your character name", placeholder="@username")
-                    new_pw = st.text_input("What is your secret?", type="password")
+                    new_name = st.text_input("Choose a character name", placeholder="@username")
+                    new_pw = st.text_input("Choose your truth not told", type="password")
                     confirm = st.text_input("Repeat it", type="password")
                     created = st.form_submit_button("Begin my story  ▷", use_container_width=True)
                 if created:
