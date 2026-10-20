@@ -1271,16 +1271,26 @@ def page_interests():
         logged_in_nav("interests")
         st.markdown('<div class="page-title">My Interests</div><div class="page-sub">Your preferred genres, saved shelf, and reading history.</div>', unsafe_allow_html=True)
         st.markdown('### Preferred genres')
-        genres=[g for g in user.get("genres",[]) if g in genres_for_scope(df, category)]
+        # My Interests should show the reader's full saved preference set.
+        # Free Reader may select genres across both Fiction and Academics, so do not
+        # filter those preferences down to only the currently active library.
+        preference_scope = user.get("scope", category)
+        valid_preference_genres = genres_for_scope(df, preference_scope)
+        genres=[g for g in user.get("genres",[]) if g in valid_preference_genres]
         if genres:
             cols=st.columns(min(5, len(genres)))
             for i,g in enumerate(genres):
                 cols[i%len(cols)].markdown(render_genre_badge(g),unsafe_allow_html=True)
         else:
             st.info("No preferred genres selected yet.")
-        if st.button("Edit preferred genres", key="interests_edit"):
-            prepare_interest_edit(user)
-        st.markdown('<div style="height:.5rem"></div>', unsafe_allow_html=True)
+
+        # Keep the edit control visually separate from the genre shelf.
+        st.markdown('<div style="height:1.15rem"></div>', unsafe_allow_html=True)
+        edit_col, _edit_space = st.columns([1.35, 4.65])
+        with edit_col:
+            if st.button("Edit preferred genres", key="interests_edit", use_container_width=True):
+                prepare_interest_edit(user)
+        st.markdown('<div style="height:.9rem"></div>', unsafe_allow_html=True)
         saved_panel, history_panel = st.columns([1.04,1], gap="large")
         with saved_panel:
             st.markdown('<div class="interests-panel-title">Saved books</div>', unsafe_allow_html=True)
