@@ -9,7 +9,7 @@ import re
 import secrets
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -97,6 +97,82 @@ def _migrate_user(user: dict) -> tuple[dict, bool]:
     return user, changed
 
 
+def _supabase_settings():
+    """Return cloud storage settings from Streamlit Secrets, if configured."""
+    try:
+        url = str(st.secrets.get("supabase_url", "")).strip()
+        key = str(st.secrets.get("supabase_secret_key", "")).strip()
+        table = str(st.secrets.get("supabase_table", "moon_ruler_users")).strip() or "moon_ruler_users"
+    except Exception:
+        return "", "", "moon_ruler_users"
+    return url, key, table
+
+
+@st.cache_resource(show_spinner=False)
+def _supabase_client():
+    """Create one server-side Supabase client. Returns None when cloud storage is not configured."""
+    url, key, _ = _supabase_settings()
+    if not url or not key:
+        return None
+    try:
+        from supabase import create_client
+        return create_client(url, key)
+    except Exception:
+        return None
+
+
+def cloud_storage_enabled():
+    url, key, _ = _supabase_settings()
+    return bool(url and key)
+
+
+def _load_users_from_cloud():
+    client = _supabase_client()
+    if client is None:
+        return None
+    _, _, table = _supabase_settings()
+    try:
+        response = client.table(table).select("username,data").execute()
+        users = {}
+        for row in (response.data or []):
+            username = str(row.get("username", "")).strip().lstrip("@").lower()
+            payload = row.get("data")
+            if username and isinstance(payload, dict):
+                users[username] = payload
+        return users
+    except Exception as exc:
+        st.session_state["cloud_storage_error"] = f"Cloud storage read failed: {exc}"
+        return None
+
+
+def _save_users_to_cloud(users):
+    client = _supabase_client()
+    if client is None:
+        return False
+    _, _, table = _supabase_settings()
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        rows = [
+            {"username": str(username).strip().lstrip("@").lower(), "data": user, "updated_at": now}
+            for username, user in users.items()
+        ]
+        if rows:
+            client.table(table).upsert(rows, on_conflict="username").execute()
+
+        # Keep account deletion behavior consistent with the local JSON backend.
+        existing = client.table(table).select("username").execute().data or []
+        desired = {str(u).strip().lstrip("@").lower() for u in users}
+        for row in existing:
+            username = str(row.get("username", "")).strip().lstrip("@").lower()
+            if username and username not in desired:
+                client.table(table).delete().eq("username", username).execute()
+        st.session_state.pop("cloud_storage_error", None)
+        return True
+    except Exception as exc:
+        st.session_state["cloud_storage_error"] = f"Cloud storage write failed: {exc}"
+        return False
+
+
 def _read_admin_registry(path):
     if not path.exists():
         return set()
@@ -147,9 +223,14 @@ def save_admins(admins):
 
 
 def load_users():
-    if not USERS_PATH.exists():
-        return {}
-    users = json.loads(USERS_PATH.read_text(encoding="utf-8"))
+    # Prefer persistent cloud storage when Supabase is configured.
+    users = _load_users_from_cloud() if cloud_storage_enabled() else None
+    if users is None:
+        if not USERS_PATH.exists():
+            users = {}
+        else:
+            users = json.loads(USERS_PATH.read_text(encoding="utf-8"))
+
     admins = load_admins()
     changed = False
     registry_changed = False
@@ -170,6 +251,9 @@ def load_users():
 
 
 def save_users(users):
+    """Persist users to Supabase when configured; otherwise use data/users.json locally."""
+    if cloud_storage_enabled() and _save_users_to_cloud(users):
+        return
     USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
     USERS_PATH.write_text(json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -435,28 +519,39 @@ div[data-testid="stExpander"]{background:rgba(255,255,255,.22);border:1px solid 
 [class*='st-key-rec-actions-'] [data-testid='stHorizontalBlock']{gap:.35rem}
 [class*='st-key-rec-actions-'] .stButton>button{min-height:30px!important;padding:.15rem .45rem!important;font-size:.78rem!important;border-radius:6px!important}
 
-/* Dashboard vector icon actions — true flex centering, no text-layout offset. */
+/* Dashboard icon-only actions — clean, borderless vector controls. */
 [class*="st-key-dash_save_"] .stButton>button,
 [class*="st-key-dash_rate_"] .stButton>button{
- width:46px!important;min-width:46px!important;max-width:46px!important;
- height:46px!important;min-height:46px!important;max-height:46px!important;
- padding:0!important;margin:0!important;border-radius:11px!important;
+ width:42px!important;min-width:42px!important;max-width:42px!important;
+ height:42px!important;min-height:42px!important;max-height:42px!important;
+ padding:0!important;margin:0!important;
+ border:none!important;outline:none!important;box-shadow:none!important;
+ background:transparent!important;border-radius:999px!important;
  display:flex!important;align-items:center!important;justify-content:center!important;
- gap:0!important;overflow:hidden!important;line-height:1!important;
+ gap:0!important;overflow:visible!important;line-height:1!important;
+ transition:background-color .18s ease,transform .18s ease!important;
 }
-/* Remove the hidden label from layout completely so it cannot shift the icon. */
+[class*="st-key-dash_save_"] .stButton>button:hover,
+[class*="st-key-dash_rate_"] .stButton>button:hover{
+ background:rgba(111,78,55,.10)!important;
+ transform:scale(1.08)!important;
+ box-shadow:none!important;
+}
+[class*="st-key-dash_save_"] .stButton>button:active,
+[class*="st-key-dash_rate_"] .stButton>button:active{
+ transform:scale(.94)!important;
+}
 [class*="st-key-dash_save_"] .stButton>button p,
 [class*="st-key-dash_rate_"] .stButton>button p{
  display:none!important;width:0!important;height:0!important;margin:0!important;padding:0!important;
 }
-/* Material icon is centered by the button flexbox itself. */
 [class*="st-key-dash_save_"] .stButton>button [data-testid="stIconMaterial"],
 [class*="st-key-dash_rate_"] .stButton>button [data-testid="stIconMaterial"]{
  position:static!important;inset:auto!important;transform:none!important;
  margin:0!important;padding:0!important;
- font-size:23px!important;width:23px!important;height:23px!important;line-height:23px!important;
+ font-size:25px!important;width:25px!important;height:25px!important;line-height:25px!important;
  display:flex!important;align-items:center!important;justify-content:center!important;
- flex:0 0 23px!important;color:var(--brown2)!important;overflow:visible!important;
+ flex:0 0 25px!important;color:var(--brown2)!important;overflow:visible!important;
 }
 
 /* Dashboard density */
