@@ -435,29 +435,28 @@ div[data-testid="stExpander"]{background:rgba(255,255,255,.22);border:1px solid 
 [class*='st-key-rec-actions-'] [data-testid='stHorizontalBlock']{gap:.35rem}
 [class*='st-key-rec-actions-'] .stButton>button{min-height:30px!important;padding:.15rem .45rem!important;font-size:.78rem!important;border-radius:6px!important}
 
-/* Dashboard vector icon actions — Material Symbols stay crisp and cannot be cropped like font glyphs. */
+/* Dashboard vector icon actions — true flex centering, no text-layout offset. */
 [class*="st-key-dash_save_"] .stButton>button,
 [class*="st-key-dash_rate_"] .stButton>button{
  width:46px!important;min-width:46px!important;max-width:46px!important;
  height:46px!important;min-height:46px!important;max-height:46px!important;
  padding:0!important;margin:0!important;border-radius:11px!important;
- position:relative!important;display:block!important;overflow:hidden!important;
+ display:flex!important;align-items:center!important;justify-content:center!important;
+ gap:0!important;overflow:hidden!important;line-height:1!important;
 }
-/* Hide the text label without letting it affect icon placement. */
+/* Remove the hidden label from layout completely so it cannot shift the icon. */
 [class*="st-key-dash_save_"] .stButton>button p,
 [class*="st-key-dash_rate_"] .stButton>button p{
- position:absolute!important;width:1px!important;height:1px!important;
- padding:0!important;margin:-1px!important;overflow:hidden!important;
- clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;
+ display:none!important;width:0!important;height:0!important;margin:0!important;padding:0!important;
 }
-/* Force the Material vector icon to the exact geometric center of the button. */
+/* Material icon is centered by the button flexbox itself. */
 [class*="st-key-dash_save_"] .stButton>button [data-testid="stIconMaterial"],
 [class*="st-key-dash_rate_"] .stButton>button [data-testid="stIconMaterial"]{
- position:absolute!important;left:50%!important;top:50%!important;
- transform:translate(-50%,-50%)!important;margin:0!important;padding:0!important;
+ position:static!important;inset:auto!important;transform:none!important;
+ margin:0!important;padding:0!important;
  font-size:23px!important;width:23px!important;height:23px!important;line-height:23px!important;
  display:flex!important;align-items:center!important;justify-content:center!important;
- color:var(--brown2)!important;overflow:visible!important;
+ flex:0 0 23px!important;color:var(--brown2)!important;overflow:visible!important;
 }
 
 /* Dashboard density */
@@ -650,7 +649,8 @@ div[data-testid="stExpander"]{background:rgba(255,255,255,.22);border:1px solid 
 }
 [class*="st-key-dash_save_"] .stButton > button:hover [data-testid="stIconMaterial"],
 [class*="st-key-dash_rate_"] .stButton > button:hover [data-testid="stIconMaterial"] {
-    transform: scale(1.08);
+    transform: scale(1.08) !important;
+    transform-origin: center center !important;
 }
 
 /* Interest shelf cards */
@@ -1841,9 +1841,17 @@ def page_dashboard():
         left,middle,right=st.columns([1.05,1.45,1.05],gap="large")
         with left:
             if st.button("My Interests  ▷",key="dash_open_interests",use_container_width=True): go("interests")
-            interests=[g for g in user.get("genres",[]) if g in genres_for_scope(df,category)]
-            if not interests: interests=list(df[df["category"]==category]["genre"].value_counts().index[:3])
-            for genre in interests[:4]:
+            # Keep Dashboard interests consistent with the dedicated My Interests page.
+            # A Free Reader may save genres from both Fiction and Academics, so those
+            # cross-category selections should remain visible here as well.
+            saved_genres = list(dict.fromkeys(user.get("genres", [])))
+            if user.get("scope") == "Free Reader":
+                interests = saved_genres
+            else:
+                interests = [g for g in saved_genres if g in genres_for_scope(df, user.get("scope", category))]
+            if not interests:
+                interests = list(df[df["category"] == category]["genre"].value_counts().index[:3])
+            for genre in interests[:5]:
                 mine=df[(df["genre"]==genre)&(df["title"].isin(set(ratings)|set(favorites)))]
                 lines="".join(f'<div class="interest-line">{("♥" if t in favorites else "★"+str(ratings.get(t,"")))} {html.escape(t)}</div>' for t in mine["title"].head(3)) or '<div class="interest-line">Nothing on this shelf yet</div>'
                 st.markdown(f'<div class="interest-card"><div class="interest-title">{html.escape(genre)}</div>{lines}</div>',unsafe_allow_html=True)
