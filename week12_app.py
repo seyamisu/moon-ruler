@@ -439,15 +439,24 @@ div[data-testid="stExpander"]{background:rgba(255,255,255,.22);border:1px solid 
 [class*="st-key-dash_save_"] .stButton>button,
 [class*="st-key-dash_rate_"] .stButton>button{
  width:46px!important;min-width:46px!important;max-width:46px!important;
- height:46px!important;min-height:46px!important;padding:0!important;
- border-radius:11px!important;display:flex!important;align-items:center!important;justify-content:center!important;
- overflow:visible!important;
+ height:46px!important;min-height:46px!important;max-height:46px!important;
+ padding:0!important;margin:0!important;border-radius:11px!important;
+ position:relative!important;display:block!important;overflow:hidden!important;
 }
+/* Hide the text label without letting it affect icon placement. */
 [class*="st-key-dash_save_"] .stButton>button p,
-[class*="st-key-dash_rate_"] .stButton>button p{font-size:0!important;line-height:0!important;margin:0!important;}
+[class*="st-key-dash_rate_"] .stButton>button p{
+ position:absolute!important;width:1px!important;height:1px!important;
+ padding:0!important;margin:-1px!important;overflow:hidden!important;
+ clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;
+}
+/* Force the Material vector icon to the exact geometric center of the button. */
 [class*="st-key-dash_save_"] .stButton>button [data-testid="stIconMaterial"],
 [class*="st-key-dash_rate_"] .stButton>button [data-testid="stIconMaterial"]{
+ position:absolute!important;left:50%!important;top:50%!important;
+ transform:translate(-50%,-50%)!important;margin:0!important;padding:0!important;
  font-size:23px!important;width:23px!important;height:23px!important;line-height:23px!important;
+ display:flex!important;align-items:center!important;justify-content:center!important;
  color:var(--brown2)!important;overflow:visible!important;
 }
 
