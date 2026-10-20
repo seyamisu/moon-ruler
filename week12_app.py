@@ -126,6 +126,55 @@ def cloud_storage_enabled():
     return bool(url and key)
 
 
+def cloud_storage_diagnostics(test_write=False):
+    """Return a readable health report for the configured Supabase backend.
+
+    When ``test_write`` is True, a temporary probe row is inserted and deleted to
+    verify that the configured server-side key can both read and write the table.
+    """
+    url, key, table = _supabase_settings()
+    report = {
+        "configured": bool(url and key),
+        "url": bool(url),
+        "key": bool(key),
+        "table": table,
+        "client": False,
+        "read": False,
+        "write": None,
+        "error": "",
+    }
+    if not report["configured"]:
+        report["error"] = "Missing supabase_url or supabase_secret_key in Streamlit Secrets."
+        return report
+
+    client = _supabase_client()
+    if client is None:
+        report["error"] = (
+            "Supabase client could not be created. Check that the 'supabase' package is installed "
+            "and that the URL/key are valid."
+        )
+        return report
+
+    report["client"] = True
+    try:
+        client.table(table).select("username").limit(1).execute()
+        report["read"] = True
+        if test_write:
+            probe = "__moon_ruler_storage_probe__"
+            now = datetime.now(timezone.utc).isoformat()
+            client.table(table).upsert(
+                {"username": probe, "data": {"probe": True}, "updated_at": now},
+                on_conflict="username",
+            ).execute()
+            client.table(table).delete().eq("username", probe).execute()
+            report["write"] = True
+    except Exception as exc:
+        report["error"] = str(exc)
+        if test_write:
+            report["write"] = False
+    return report
+
+
 def _load_users_from_cloud():
     client = _supabase_client()
     if client is None:
@@ -251,8 +300,18 @@ def load_users():
 
 
 def save_users(users):
-    """Persist users to Supabase when configured; otherwise use data/users.json locally."""
-    if cloud_storage_enabled() and _save_users_to_cloud(users):
+    """Persist users to Supabase when configured; otherwise use data/users.json locally.
+
+    A failed configured cloud write is recorded prominently instead of silently
+    pretending that local JSON is persistent on Streamlit Community Cloud.
+    """
+    if cloud_storage_enabled():
+        if _save_users_to_cloud(users):
+            return
+        # Keep a local emergency copy, but make the cloud failure explicit.
+        USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        USERS_PATH.write_text(json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8")
+        st.session_state["cloud_storage_fallback"] = True
         return
     USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
     USERS_PATH.write_text(json.dumps(users, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -1129,8 +1188,8 @@ def page_login():
                         st.error("That name and secret do not match any character.")
             with sign_up:
                 with st.form("signup"):
-                    new_name = st.text_input("Choose your character name", placeholder="@username")
-                    new_pw = st.text_input("What is your secret?", type="password")
+                    new_name = st.text_input("Choose a character name", placeholder="@username")
+                    new_pw = st.text_input("Choose your truth not told", type="password")
                     confirm = st.text_input("Repeat it", type="password")
                     created = st.form_submit_button("Begin my story  ▷", use_container_width=True)
                 if created:
@@ -1463,7 +1522,7 @@ def page_recommendations():
         m2.metric("Taste strength", f"{profile_strength(user)}%")
         m3.metric("Rated", len(ratings))
         m4.metric("Read excluded", len(read_titles))
-        with st.expander("Recommendation diagnostics"):
+        with st.expander("Recommendation diagnostics — useful during instructor review"):
             st.write(f"**Active category:** {category}")
             st.write(f"**Selected genres:** {', '.join(user.get('genres', [])) or 'None yet'}")
             st.write(f"**Saved books:** {len(favorites)} · **Read books:** {len(user.get('read_books', []))} · **Rated books:** {len(ratings)}")
@@ -1722,6 +1781,28 @@ def page_admin():
         with st.expander("Dataset distribution"):
             dist = overview_books.groupby(["category","genre"]).size().reset_index(name="books")
             st.dataframe(dist, use_container_width=True, hide_index=True)
+
+        with st.expander("Cloud Storage Status", expanded=True):
+            status = cloud_storage_diagnostics(test_write=False)
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Configured", "Yes" if status["configured"] else "No")
+            c2.metric("Table readable", "Yes" if status["read"] else "No")
+            c3.metric("Backend", "Supabase" if status["read"] else "Local fallback")
+            st.caption(f"Expected table: {status['table']}")
+            if status["read"]:
+                st.success("Supabase connection is readable.")
+            else:
+                st.error(status["error"] or st.session_state.get("cloud_storage_error", "Cloud storage is unavailable."))
+            if st.session_state.get("cloud_storage_fallback"):
+                st.warning("A previous cloud write failed in this session, so Moon Ruler used a temporary local fallback copy.")
+            if st.button("Test Supabase read + write", key="test_supabase_rw"):
+                probe = cloud_storage_diagnostics(test_write=True)
+                if probe["read"] and probe["write"]:
+                    st.success("Supabase read/write test passed. Persistent account storage is working.")
+                    st.session_state.pop("cloud_storage_fallback", None)
+                    st.session_state.pop("cloud_storage_error", None)
+                else:
+                    st.error(f"Supabase write test failed: {probe['error'] or 'Unknown error'}")
 
         books_tab, users_tab = st.tabs(["Book Management", "User Management"])
 
