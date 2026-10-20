@@ -712,6 +712,171 @@ div[data-testid="stExpander"]:hover {
     box-shadow: 0 6px 14px rgba(80,55,35,.06);
 }
 
+
+/* ============================================================
+   BOOK PAGE TURN TRANSITION
+   Triggered only when navigating to a different Moon Ruler page.
+   ============================================================ */
+.moon-turn-stage{
+    position:fixed;
+    z-index:999990;
+    left:50%;
+    top:50%;
+    width:min(1390px,calc(100vw - 2.2rem));
+    height:min(86vh,780px);
+    transform:translate(-50%,-50%);
+    perspective:2200px;
+    pointer-events:none;
+    overflow:visible;
+}
+.moon-turn-sheet{
+    position:absolute;
+    inset:0;
+    border:1px solid #4F392D;
+    background:
+      linear-gradient(90deg,rgba(255,255,255,.18),transparent 12%,transparent 84%,rgba(77,49,34,.12)),
+      linear-gradient(180deg,#FBF7F0 0%,#F5EFE5 100%);
+    box-shadow:0 22px 55px rgba(0,0,0,.26);
+    backface-visibility:hidden;
+    transform-style:preserve-3d;
+}
+.moon-turn-stage.forward .moon-turn-sheet{
+    transform-origin:left center;
+    animation:moonTurnForward .68s cubic-bezier(.22,.72,.18,1) both;
+}
+.moon-turn-stage.back .moon-turn-sheet{
+    transform-origin:right center;
+    animation:moonTurnBack .68s cubic-bezier(.22,.72,.18,1) both;
+}
+.moon-turn-sheet::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(90deg,rgba(80,55,38,.20),transparent 18%,transparent 82%,rgba(255,255,255,.28));
+    opacity:.45;
+}
+@keyframes moonTurnForward{
+    0%   {opacity:1;transform:rotateY(0deg) scaleX(1)}
+    45%  {opacity:1;transform:rotateY(-42deg) scaleX(.98);box-shadow:18px 24px 52px rgba(0,0,0,.22)}
+    78%  {opacity:.96;transform:rotateY(-86deg) scaleX(.94)}
+    100% {opacity:0;transform:rotateY(-112deg) scaleX(.90)}
+}
+@keyframes moonTurnBack{
+    0%   {opacity:1;transform:rotateY(0deg) scaleX(1)}
+    45%  {opacity:1;transform:rotateY(42deg) scaleX(.98);box-shadow:-18px 24px 52px rgba(0,0,0,.22)}
+    78%  {opacity:.96;transform:rotateY(86deg) scaleX(.94)}
+    100% {opacity:0;transform:rotateY(112deg) scaleX(.90)}
+}
+
+/* ============================================================
+   RESPONSIVE / MOBILE BOOK LAYOUT
+   Desktop = open book spread. Phone portrait = intentional single page.
+   ============================================================ */
+@media (max-width: 768px){
+    html,body,.stApp{overflow-x:hidden!important}
+    .block-container{
+        width:100%!important;
+        max-width:100%!important;
+        padding:.45rem .35rem .8rem!important;
+    }
+
+    /* A phone cannot comfortably show two readable book pages side-by-side.
+       Convert the onboarding shell into one clean page instead of squeezing it. */
+    .st-key-book-login,.st-key-book-profile,.st-key-book-genres{
+        background:linear-gradient(180deg,#FBF7F0 0%,var(--paper) 100%)!important;
+        min-height:auto!important;
+        padding:1rem .85rem 1.15rem!important;
+        border-radius:0!important;
+        box-shadow:0 10px 28px rgba(0,0,0,.22)!important;
+    }
+    .st-key-book-dashboard,.page-shell{
+        min-height:auto!important;
+        padding:.75rem .6rem 1rem!important;
+        box-shadow:0 10px 28px rgba(0,0,0,.22)!important;
+    }
+
+    .figma-quote{
+        max-width:100%!important;
+        margin:.35rem auto .9rem!important;
+        font-size:1.55rem!important;
+        line-height:1.03!important;
+        text-align:center!important;
+    }
+    .figma-title{font-size:2.35rem!important;line-height:.86!important}
+    .figma-rule{width:92%!important;margin:.7rem auto!important}
+    .figma-section{font-size:1.45rem!important;margin-bottom:.6rem!important}
+    .figma-small{font-size:.76rem!important}
+
+    /* Tighter forms/buttons for touch while retaining accessible hit targets. */
+    [data-testid="stTextInput"] input,
+    [data-testid="stDateInput"] input,
+    [data-baseweb="select"]>div,
+    [data-testid="stSelectbox"]>div>div{
+        min-height:46px!important;
+        font-size:16px!important; /* prevents iOS/Android browser zoom */
+    }
+    .stButton>button,[data-testid="stFormSubmitButton"]>button{
+        min-height:44px!important;
+    }
+
+    /* Navigation becomes a swipeable single row instead of tiny or multi-line buttons. */
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-nav_"]){
+        display:flex!important;
+        flex-wrap:nowrap!important;
+        overflow-x:auto!important;
+        overflow-y:hidden!important;
+        gap:.4rem!important;
+        padding-bottom:.25rem!important;
+        scrollbar-width:none;
+        -webkit-overflow-scrolling:touch;
+    }
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-nav_"])::-webkit-scrollbar{display:none}
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-nav_"]) > [data-testid="stColumn"]{
+        flex:0 0 132px!important;
+        width:132px!important;
+        min-width:132px!important;
+    }
+    [class*="st-key-nav_"] .stButton>button{
+        white-space:nowrap!important;
+        font-size:.84rem!important;
+    }
+
+    /* Recommendation cards and covers */
+    [class*='st-key-rec-book-card-']{
+        padding:.55rem .6rem!important;
+        border-radius:13px!important;
+    }
+    .cover-title{font-size:1.02rem!important}
+    .cover-meta{font-size:.68rem!important;white-space:normal!important}
+    .cover-reason{font-size:.76rem!important}
+    .match-badge{font-size:.9rem!important}
+    .profile-card{min-height:auto!important;border-radius:18px!important;padding:15px 12px!important}
+    .avatar-ring{width:68px!important;height:68px!important}
+    .profile-name{font-size:1.6rem!important}
+
+    /* Interest / genre grids become comfortable single/two-column mobile cards. */
+    .interest-card{min-height:auto!important;padding:10px 11px!important}
+    .genre-badge{min-height:92px!important;padding:11px 8px!important}
+    .genre-badge-icon{font-size:1.65rem!important}
+
+    /* Remove huge desktop-only spacer distances. */
+    .st-key-profile-nav,.st-key-genres-nav,.st-key-genres-nav.bookworm{margin-top:1.25rem!important}
+
+    /* Page-turn overlay matches the phone page rather than desktop dimensions. */
+    .moon-turn-stage{
+        width:calc(100vw - 1rem)!important;
+        height:min(82vh,720px)!important;
+    }
+}
+
+/* In phone landscape, regain some of the desktop breathing room while staying responsive. */
+@media (max-width: 950px) and (orientation: landscape){
+    .block-container{padding:.35rem .55rem .65rem!important}
+    .figma-quote{margin:2.1rem auto 0!important;font-size:1.55rem!important}
+    .st-key-book-login,.st-key-book-profile,.st-key-book-genres{padding:.9rem 1.15rem!important}
+    .moon-turn-stage{height:calc(100vh - 1rem)!important}
+}
+
 /* Respect operating-system accessibility preference */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -726,9 +891,39 @@ div[data-testid="stExpander"]:hover {
 """, unsafe_allow_html=True)
 
 
+PAGE_ORDER = {
+    "login": 0,
+    "profile": 1,
+    "genres": 2,
+    "dashboard": 3,
+    "interests": 4,
+    "recommendations": 5,
+    "book_detail": 6,
+    "profile_page": 7,
+    "about": 8,
+    "admin": 9,
+}
+
+
 def go(page):
+    current = st.session_state.get("page", "login")
+    old_rank = PAGE_ORDER.get(current, 0)
+    new_rank = PAGE_ORDER.get(page, old_rank + 1)
+    st.session_state.page_turn_direction = "back" if new_rank < old_rank else "forward"
+    st.session_state.page_turn_pending = current != page
     st.session_state.page = page
     st.rerun()
+
+
+def render_page_turn():
+    """Render a one-shot visual page turn only for actual page navigation."""
+    if not st.session_state.pop("page_turn_pending", False):
+        return
+    direction = st.session_state.pop("page_turn_direction", "forward")
+    st.markdown(
+        f'<div class="moon-turn-stage {direction}"><div class="moon-turn-sheet"></div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def logout():
@@ -1654,7 +1849,10 @@ st.session_state.setdefault("editing_preferences", False)
 st.session_state.setdefault("rec_limits", {})
 st.session_state.setdefault("selected_book", None)
 st.session_state.setdefault("book_return_page", "recommendations")
+st.session_state.setdefault("page_turn_pending", False)
+st.session_state.setdefault("page_turn_direction", "forward")
 inject_css()
+render_page_turn()
 page = st.session_state.page
 if page != "login" and (not st.session_state.username or st.session_state.username not in load_users()):
     page = "login"
