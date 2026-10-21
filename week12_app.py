@@ -1244,14 +1244,17 @@ div[data-testid="stExpander"]:hover {
 }
 .genre-choice-art{
     width:100%;
-    height:44px;
+    height:46px;
     display:flex;
     align-items:center;
     justify-content:center;
-    margin-bottom:-.28rem;
+    /* Overlay the artwork inside the following Streamlit button instead
+       of letting it sit above the card border. */
+    margin-bottom:-46px;
+    transform:translateY(8px);
     pointer-events:none;
     position:relative;
-    z-index:2;
+    z-index:5;
 }
 .genre-choice-img{
     width:34px;
@@ -1265,19 +1268,37 @@ div[data-testid="stExpander"]:hover {
     transform:scale(1.06);
     filter:drop-shadow(0 3px 4px rgba(54,36,23,.14));
 }
-/* Leave visual room for the PNG sitting above the label. */
+/* Genre selection cards: icon on top, title below, both fully contained
+   inside the bordered card. */
 .st-key-genre-grid .stButton>button{
-    min-height:70px!important;
-    padding:1.05rem .55rem .48rem!important;
+    min-height:88px!important;
+    padding:46px .55rem 10px!important;
+    display:flex!important;
+    align-items:flex-end!important;
+    justify-content:center!important;
+    overflow:hidden!important;
+}
+.st-key-genre-grid .stButton>button p{
+    margin:0!important;
+    line-height:1.05!important;
+    text-align:center!important;
 }
 .st-key-genre-grid [data-testid="stVerticalBlock"]{
-    gap:.05rem!important;
+    gap:.12rem!important;
 }
 @media (max-width: 760px){
     .genre-badge-img{width:38px;height:38px}
-    .genre-choice-art{height:38px}
+    .genre-choice-art{
+        height:40px;
+        margin-bottom:-40px;
+        transform:translateY(7px);
+    }
     .genre-choice-img{width:30px;height:30px}
     .genre-meta-icon{width:14px;height:14px}
+    .st-key-genre-grid .stButton>button{
+        min-height:80px!important;
+        padding:40px .45rem 9px!important;
+    }
 }
 
 </style>
