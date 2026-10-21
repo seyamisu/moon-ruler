@@ -46,11 +46,18 @@ TIERS = {
     "Bookworm": {"blurb": "Reads regularly and extensively", "max_genres": 5},
 }
 GENRE_ICONS = {
-    "Fantasy": "🐉", "Romance": "💕", "Mystery & Thriller": "🔎",
-    "Science Fiction": "🚀", "Historical & Literary Fiction": "🕰️",
-    "STEM": "🧪", "Business & Economics": "📈", "Social Sciences": "🌐",
-    "Humanities & Arts": "🎨", "Medicine & Health": "⚕️",
+    "Fantasy": "fantasy.png",
+    "Romance": "romance.png",
+    "Mystery & Thriller": "mystery_thriller.png",
+    "Science Fiction": "science_fiction.png",
+    "Historical & Literary Fiction": "historical_literary_fiction.png",
+    "STEM": "stem.png",
+    "Business & Economics": "business_economics.png",
+    "Social Sciences": "social_sciences.png",
+    "Humanities & Arts": "humanities_arts.png",
+    "Medicine & Health": "medicine_health.png",
 }
+GENRE_ICON_DIR = BASE_DIR / "assets" / "icons"
 OLD_GENRE_MAP = {
     "Sci-Fi": "Science Fiction", "Mystery": "Mystery & Thriller",
     "Historical": "Historical & Literary Fiction", "Mathematics": "STEM",
@@ -517,9 +524,47 @@ def get_book_cover(title, author=""):
     return fallback_cover_data_uri(title, author)
 
 
+@st.cache_data(show_spinner=False)
+def genre_icon_data_uri(genre):
+    """Return a bundled PNG genre icon as a browser-safe data URI."""
+    filename = GENRE_ICONS.get(genre)
+    if not filename:
+        return ""
+    path = GENRE_ICON_DIR / filename
+    if not path.exists():
+        return ""
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def genre_icon_html(genre, css_class="genre-inline-icon", alt=True):
+    src = genre_icon_data_uri(genre)
+    if not src:
+        return ""
+    alt_text = html.escape(genre) if alt else ""
+    return f'<img class="{css_class}" src="{src}" alt="{alt_text}">'
+
+
+def genre_meta_html(genre):
+    return f'{genre_icon_html(genre, "genre-meta-icon")}<span>{html.escape(genre)}</span>'
+
+
 def render_genre_badge(genre):
-    icon = GENRE_ICONS.get(genre, "📚")
-    return f'<div class="genre-badge"><div class="genre-badge-icon">{icon}</div><div class="genre-badge-title">{html.escape(genre)}</div></div>'
+    return (
+        '<div class="genre-badge">'
+        f'<div class="genre-badge-icon">{genre_icon_html(genre, "genre-badge-img")}</div>'
+        f'<div class="genre-badge-title">{html.escape(genre)}</div>'
+        '</div>'
+    )
+
+
+def render_genre_choice_icon(genre, selected=False):
+    state = " selected" if selected else ""
+    return (
+        f'<div class="genre-choice-art{state}">'
+        f'{genre_icon_html(genre, "genre-choice-img")}'
+        '</div>'
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -1161,6 +1206,80 @@ div[data-testid="stExpander"]:hover {
 .st-key-dashboard-recommendation-scroll::-webkit-scrollbar-thumb:hover {
     background: rgba(111, 78, 55, 0.50);
 }
+
+/* ============================================================
+   PNG GENRE ICONS
+   ============================================================ */
+.genre-badge-icon{
+    min-height:46px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:.25rem;
+}
+.genre-badge-img{
+    width:46px;
+    height:46px;
+    object-fit:contain;
+    display:block;
+}
+.genre-inline-icon{
+    width:1em;
+    height:1em;
+    object-fit:contain;
+    vertical-align:-0.14em;
+}
+.genre-meta{
+    display:inline-flex;
+    align-items:center;
+    gap:.28rem;
+    vertical-align:middle;
+}
+.genre-meta-icon{
+    width:16px;
+    height:16px;
+    object-fit:contain;
+    display:inline-block;
+    flex:0 0 auto;
+}
+.genre-choice-art{
+    width:100%;
+    height:44px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:-.28rem;
+    pointer-events:none;
+    position:relative;
+    z-index:2;
+}
+.genre-choice-img{
+    width:34px;
+    height:34px;
+    object-fit:contain;
+    display:block;
+    filter:drop-shadow(0 2px 3px rgba(54,36,23,.08));
+    transition:transform .22s ease, filter .22s ease;
+}
+.genre-choice-art.selected .genre-choice-img{
+    transform:scale(1.06);
+    filter:drop-shadow(0 3px 4px rgba(54,36,23,.14));
+}
+/* Leave visual room for the PNG sitting above the label. */
+.st-key-genre-grid .stButton>button{
+    min-height:70px!important;
+    padding:1.05rem .55rem .48rem!important;
+}
+.st-key-genre-grid [data-testid="stVerticalBlock"]{
+    gap:.05rem!important;
+}
+@media (max-width: 760px){
+    .genre-badge-img{width:38px;height:38px}
+    .genre-choice-art{height:38px}
+    .genre-choice-img{width:30px;height:30px}
+    .genre-meta-icon{width:14px;height:14px}
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1393,7 +1512,8 @@ def page_genres():
                     for i, genre in enumerate(genres):
                         selected = genre in chosen
                         with cols[i % 3]:
-                            label = f"{GENRE_ICONS.get(genre,'•')}\n{genre.upper()}"
+                            st.markdown(render_genre_choice_icon(genre, selected), unsafe_allow_html=True)
+                            label = genre.upper()
                             if choice_button(label, selected, f"genre_btn_{genre}"):
                                 if selected:
                                     chosen.remove(genre)
@@ -1443,7 +1563,7 @@ def mini_recommendation_row(row, reason, favorites, ratings, key_prefix, return_
             title_col, score_col = st.columns([4.5, 1.35], gap="small")
             with title_col:
                 st.markdown(f'<div class="cover-title">{html.escape(row["title"])}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="cover-meta">{html.escape(row["author"])} · {GENRE_ICONS.get(row["genre"], "📚")} {html.escape(row["genre"])}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="cover-meta">{html.escape(row["author"])} · <span class="genre-meta">{genre_meta_html(row["genre"])}</span></div>', unsafe_allow_html=True)
             with score_col:
                 st.markdown(f'<div class="match-badge">{html.escape(score_text)}</div>', unsafe_allow_html=True)
 
@@ -1713,7 +1833,7 @@ def page_book_detail():
         with hero_cover:
             st.image(get_book_cover(row["title"], row["author"]), use_container_width=True)
         with hero_text:
-            st.markdown(f'<div class="page-title book-detail-title">{html.escape(row["title"])}</div><div class="page-sub">{html.escape(row["author"])} · {GENRE_ICONS.get(row["genre"], "📚")} {html.escape(row["genre"])}</div>',unsafe_allow_html=True)
+            st.markdown(f'<div class="page-title book-detail-title">{html.escape(row["title"])}</div><div class="page-sub">{html.escape(row["author"])} · <span class="genre-meta">{genre_meta_html(row["genre"])}</span></div>',unsafe_allow_html=True)
         left,right=st.columns([1.25,1],gap="large")
         with left:
             st.markdown("### Book details")
