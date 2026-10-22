@@ -2797,8 +2797,8 @@ def page_login():
 
                     with sign_up:
                         with st.form("signup"):
-                            new_name = st.text_input("Choose a character name", placeholder="@username")
-                            new_pw = st.text_input("Choose your truth not told", type="password")
+                            new_name = st.text_input("Choose your character name", placeholder="@username")
+                            new_pw = st.text_input("What is your secret?", type="password")
                             confirm = st.text_input("Repeat it", type="password")
                             created = st.form_submit_button("Begin my story  ▷", use_container_width=True)
 
@@ -3222,7 +3222,7 @@ def page_recommendations():
         m2.metric("Taste strength", f"{profile_strength(user)}%")
         m3.metric("Rated", len(ratings))
         m4.metric("Read excluded", len(read_titles))
-        with st.expander("Recommendation diagnostics — useful during instructor review"):
+        with st.expander("Recommendation diagnostics"):
             st.write(f"**Active category:** {category}")
             st.write(f"**Selected genres:** {', '.join(user.get('genres', [])) or 'None yet'}")
             st.write(f"**Saved books:** {len(favorites)} · **Read books:** {len(user.get('read_books', []))} · **Rated books:** {len(ratings)}")
